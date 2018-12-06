@@ -2,7 +2,7 @@
  * SMD5050 12V RGB Strip Testing Code. SparkFunMMA8452Q accelerometer
  * testing code.
  * Author: Daiwei Chen
- * Thank you to Ian Buckley for giving out example for the RGB Strip.
+ * Thank you to Ian Buckley for the example of the RGB Strip.
  */
 
 #include "SparkFunMMA8452Q.h"
@@ -10,21 +10,56 @@
 #define RED_LED A7
 #define BLUE_LED A4
 #define GREEN_LED A5
+#define BUZZER WKP
+
+// custom structs, RGB values
+struct RGB {
+  int r;
+  int g;
+  int b;
+};
+
+// custom enum for gauntlet state
+// These states will determine how the gauntlet will react.
+enum GauntletState {
+  starting,
+  idle,
+  charging,
+  shooting
+};
 
 // MMA8452Q accelerometer
 MMA8452Q accel;
 
-int fadeSpeed = 100;
+// Gauntlet control
+GauntletState gState = starting;
 
-void TurnOn();
-void TurnOff();
-void TurnOnRainbow();
+// Accelerometer information
+double accelX, accelY, accelZ;
+
+// LED information
+struct RGB rgbStatus;
+int fadeSpeed = 10;
+
+// LED Functionalities
+void TurnOn(); // Test function
+void TurnOff(); // Test function
+void TurnOnRainbow(int);
+void printRGBInfo(RGB);
+void lightColor(RGB);
+void fadeColor(RGB, int, int);
+
+// Accelerometer functionalities
+void readAccel();
 void printAccelGraph(float, String, int, float);
 
 void setup() {
+  // Setup pinmodes
   pinMode(GREEN_LED, OUTPUT);
   pinMode(RED_LED, OUTPUT);
   pinMode(BLUE_LED, OUTPUT);
+
+  // Particle variables
 
   Serial.begin(9600);
   // Initialize the accelerometer with begin():
@@ -70,17 +105,89 @@ void loop(){
   }
 }
 
-void TurnOnRainbow() {
+/**
+ * Print the RGB info.
+ */
+void printRGBInfo(RGB color){
+  Serial.printf("Red: %d, Green: %d, Blue: %d\n", color.r, color.g, color.b);
+}
+
+/**
+ * lightColor lights up the LEDs with RGB
+ * Input:
+ *  - [color]: Full RGB value of the color to light.
+ */
+void lightColor(RGB color){
+  analogWrite(RED_LED, color.r);
+  analogWrite(BLUE_LED, color.b);
+  analogWrite(GREEN_LED, color.g);
+  printRGBInfo(color);
+}
+
+/**
+ * This function fades a specified color in and out for a specified amount of time.
+ * Input:
+ *  - [color]: Full RGB value of the color to fade.
+ *  - [fadeInTime]: Time to fade into the color (in ms).
+ *  - [fadeOutTime]: Time to fade out of the color (in ms).
+ */
+void fadeColor(RGB color, int fadeInTime, int fadeOutTime){
+  rgbStatus = {.r=0, .g=0, .b=0};
+  // Calculate the fade in and out step to correctly scale to the color.
+  // Value may be slightly off due to integer, but to the naked eye it is impossible
+  // to notice the difference.
+  int rInStep = color.r / fadeInTime;
+  int gInStep = color.g / fadeInTime;
+  int bInStep = color.b / fadeInTime;
+
+  int rOutStep = color.r / fadeOutTime;
+  int gOutStep = color.g / fadeOutTime;
+  int bOutStep = color.b / fadeOutTime;
+
+  // Fade in first using cInStep
+  Serial.printf("Fading in...");
+  for(int i = 0; i < fadeInTime; ++i){
+    rgbStatus.r += rInStep;
+    rgbStatus.g += gInStep;
+    rgbStatus.b += bInStep;
+    lightColor(rgbStatus);
+    delay(1);
+  }
+
+  // Fade out first using cInStep
+  Serial.printf("Fading in...");
+  for(int i = 0; i < fadeOutTime; ++i){
+    rgbStatus.r -= rInStep;
+    rgbStatus.g -= gInStep;
+    rgbStatus.b -= bInStep;
+    lightColor(rgbStatus);
+    delay(1);
+  }
+}
+
+/**
+ * Show all colors avaliable!
+ * Input:
+ *  - [speed]: Time between color change
+ */
+void TurnOnRainbow(int speed) {
   for(int i = 0; i < 256; i++){
     for(int j = 0; j < 256; i++){
       for(int k = 0; k < 256; i++){
         analogWrite(RED_LED, i);
         analogWrite(BLUE_LED, j);
         analogWrite(GREEN_LED, k);
-        delay(fadeSpeed);
+        delay(speed);
       }
     }
   }
+}
+
+void readAccel(){
+  accelX = accel.cx;
+  accelY = accel.cy;
+  accelZ = accel.cz;
+  Serial.printf("AccelX: %f, AccelY: %f, AccelZ: %f\n", accelX, accelY, accelZ);
 }
 
 // Testing fade in
