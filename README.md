@@ -9,12 +9,14 @@
 * 1 x Breadboard
 * Hookup wires
 * 12v Power Supply - 8xAA Battery Pack
+* 4.5v Power Supply - 3xAA Battery Pack
+* Sparkfun MMA8452Q Accelerometer
 
 ## Schematics
 
 ### LEDs
 
-Here's our basic setup of the SMD5050.
+Here's our basic schematic of the SMD5050.
 ![Schematic of LED](References/Schematic.jpg)
 
 ## Progress
@@ -23,3 +25,12 @@ Here's our basic setup of the SMD5050.
 
 Here we have our Photon Device, LEDs, and the Guantlet prototype itself.
 ![progress0](References/Progress0.jpg)
+
+First iteration:
+![First LED Setup](References/Blaster/LEDSchematic0.jpg)
+
+Second iteration:
+![Second LED Setup](References/Blaster/LEDSchematic1.jpg)
+
+It works!
+![LEDGif0](References/Blaster/LEDProgress0.jpg) ![LEDGif1](References/Blaster/LEDProgress1.jpg)

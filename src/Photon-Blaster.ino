@@ -7,23 +7,18 @@
 
 #include "SparkFunMMA8452Q.h"
 
-#define RED_LED D3
-#define BLUE_LED D2
-#define GREEN_LED D4
+#define RED_LED A7
+#define BLUE_LED A4
+#define GREEN_LED A5
 
 // MMA8452Q accelerometer
 MMA8452Q accel;
 
-int brightness = 255;
-
-int gBright = 0;
-int rBright = 0;
-int bBright = 0;
-
-int fadeSpeed = 10;
+int fadeSpeed = 100;
 
 void TurnOn();
 void TurnOff();
+void TurnOnRainbow();
 void printAccelGraph(float, String, int, float);
 
 void setup() {
@@ -40,11 +35,21 @@ void setup() {
 }
 
 void loop(){
-  Serial.printf("Fading in...\n");
-  TurnOn();
-  delay(5000);
-  Serial.printf("Fading out...\n");
-  TurnOff();
+  // Serial.printf("Fading in...\n");
+  // TurnOn();
+  // delay(3000);
+  // Serial.printf("Fading out...\n");
+  // TurnOff();
+  // TurnOnRainbow();
+  // delay(3000);
+  // TurnOff();
+  int red = random(0, 256);
+  int blue = random(0, 256);
+  int green = random(0, 256);
+  analogWrite(RED_LED, red);
+  analogWrite(BLUE_LED, blue);
+  analogWrite(GREEN_LED, green);
+  delay(fadeSpeed);
 
   // accel.available() will return 1 if new data is available, 0 otherwise
   if (accel.available())
@@ -65,35 +70,66 @@ void loop(){
   }
 }
 
+void TurnOnRainbow() {
+  for(int i = 0; i < 256; i++){
+    for(int j = 0; j < 256; i++){
+      for(int k = 0; k < 256; i++){
+        analogWrite(RED_LED, i);
+        analogWrite(BLUE_LED, j);
+        analogWrite(GREEN_LED, k);
+        delay(fadeSpeed);
+      }
+    }
+  }
+}
+
 // Testing fade in
 void TurnOn() {
+  Serial.printf("Red...\n");
   for (int i = 0; i < 256; i++) {
-    analogWrite(RED_LED, rBright);
-    rBright +=1;
+    analogWrite(RED_LED, i);
     delay(fadeSpeed);
   }
 
-  for (int i = 0; i < 256; i++) {
-    analogWrite(BLUE_LED, bBright);
-    bBright += 1;
+  for (int i = 255; i >= 0; i--) {
+    analogWrite(RED_LED, i);
     delay(fadeSpeed);
   }
 
+  // ========================
+
+  Serial.printf("Blue...\n");
   for (int i = 0; i < 256; i++) {
-    analogWrite(GREEN_LED, gBright);
-    gBright +=1;
+    analogWrite(BLUE_LED, i);
+    delay(fadeSpeed);
+  }
+
+  for (int i = 255; i >= 0; i--) {
+    analogWrite(BLUE_LED, i);
+    delay(fadeSpeed);
+  }
+
+  // ========================
+
+  Serial.printf("Green...\n");
+  for (int i = 0; i < 256; i++) {
+    analogWrite(GREEN_LED, i);
+    delay(fadeSpeed);
+  }
+
+  for (int i = 255; i >= 0; i--) {
+    analogWrite(GREEN_LED, i);
     delay(fadeSpeed);
   }
 }
 
 // Testing fade out
 void TurnOff() {
-  for (int i = 0; i < 256; i++) {
-    analogWrite(GREEN_LED, brightness);
-    analogWrite(RED_LED, brightness);
-    analogWrite(BLUE_LED, brightness);
+  for (int i = 255; i >= 0; i--) {
+    analogWrite(GREEN_LED, i);
+    analogWrite(RED_LED, i);
+    analogWrite(BLUE_LED, i);
 
-    brightness -= 1;
     delay(fadeSpeed);
   }
 }
