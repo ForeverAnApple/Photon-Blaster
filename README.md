@@ -36,4 +36,4 @@ Second iteration:
 ![Second LED Setup](References/Blaster/LEDSchematic1.jpg)
 
 It works!
-![LEDGif0](References/Blaster/LEDProgress0.jpg) ![LEDGif1](References/Blaster/LEDProgress1.jpg)
+![LEDGif0](References/Blaster/LEDProgress0.gif) ![LEDGif1](References/Blaster/LEDProgress1.gif)
