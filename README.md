@@ -19,6 +19,9 @@
 Here's our basic schematic of the SMD5050.
 ![Schematic of LED](References/Schematic.jpg)
 
+Schematic of MMA8452Q Accelerometer
+![Schematic of Accelerometer](References/AccelerometerSchematic0.png)
+
 ## Progress
 
 ### Initial Setup
