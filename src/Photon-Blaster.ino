@@ -6,11 +6,35 @@
  */
 
 #include "SparkFunMMA8452Q.h"
+#include <vector>
+#include <cstring>
+#include <cstdlib>
 
 #define RED_LED A7
 #define BLUE_LED A4
 #define GREEN_LED A5
-#define BUZZER WKP
+#define BUZZER TX
+
+// Notes frequencies
+#define D3 147
+#define E3 165
+#define F3 175
+#define C4 262
+#define D4 294
+#define E4 330
+#define F4 349
+#define G4 392
+#define Ah4 440 // Can't use A4 cause it's claimed by Photon :(
+#define B4f 466
+#define B4 494
+#define C5 523
+#define D5 587
+#define E5 659
+#define F5 698
+#define G5 784
+#define Ah5 880 // Phton claimed A5 :(
+#define B5 988
+#define C6 1046
 
 // custom structs, RGB values
 struct RGB {
@@ -28,6 +52,12 @@ enum GauntletState {
   shooting
 };
 
+enum GauntletEvent {
+
+};
+// Gauntlet event queues
+std::vector<GauntletEvent> gEventQueue;
+
 // MMA8452Q accelerometer
 MMA8452Q accel;
 
@@ -44,14 +74,25 @@ int fadeSpeed = 10;
 // LED Functionalities
 void TurnOn(); // Test function
 void TurnOff(); // Test function
-void TurnOnRainbow(int);
-void printRGBInfo(RGB);
-void lightColor(RGB);
-void fadeColor(RGB, int, int);
+void TurnOnRainbow(int, struct RGB);
+void RandomColor(int);
+void PrintRGBInfo(struct RGB);
+void LightColor(struct RGB);
+void FadeColor(struct RGB, int, int);
+
+// Buzzer and Music
+void playTone(int, int);
+void playStartingTone(struct RGB);
 
 // Accelerometer functionalities
 void readAccel();
 void printAccelGraph(float, String, int, float);
+
+// gState functionalities, updating gState as needed
+void updateState();
+
+// IoT components, HTTP get and post requests handling
+int setFadeColor(String);
 
 void setup() {
   // Setup pinmodes
@@ -60,6 +101,12 @@ void setup() {
   pinMode(BLUE_LED, OUTPUT);
 
   // Particle variables
+  Particle.variable("red", rgbStatus.r);
+  Particle.variable("green", rgbStatus.g);
+  Particle.variable("blue", rgbStatus.b);
+
+  // Particle functions
+  Particle.function("fadeColor", setFadeColor);
 
   Serial.begin(9600);
   // Initialize the accelerometer with begin():
@@ -70,21 +117,19 @@ void setup() {
 }
 
 void loop(){
-  // Serial.printf("Fading in...\n");
-  // TurnOn();
-  // delay(3000);
-  // Serial.printf("Fading out...\n");
-  // TurnOff();
-  // TurnOnRainbow();
-  // delay(3000);
-  // TurnOff();
-  int red = random(0, 256);
-  int blue = random(0, 256);
-  int green = random(0, 256);
-  analogWrite(RED_LED, red);
-  analogWrite(BLUE_LED, blue);
-  analogWrite(GREEN_LED, green);
-  delay(fadeSpeed);
+  switch(gState){
+    case starting:
+      rgbStatus = {.r=0, .g=0, .b=255};
+      playStartingTone(rgbStatus);
+      gState = idle;
+      rgbStatus = {.r=255, .g=0, .b=0};
+      break;
+    case idle:
+      TurnOnRainbow(5, rgbStatus);
+      break;
+    default:
+      break;
+  }
 
   // accel.available() will return 1 if new data is available, 0 otherwise
   if (accel.available())
@@ -105,62 +150,93 @@ void loop(){
   }
 }
 
+/* =========================== gState Controller ============================ */
+/**
+ * Updates gState depending on many control factors such as HTTP POST received,
+ * IoT Component calls, queued up events, accelerometer, and other control schemes.
+ */
+void updateState(){
+
+}
+
+/* ========================== IoT Functionalities =========================== */
+/**
+ * This is a particle function that changes the color being faded from HTTP POST
+ * The format of the color should be "### ### ###", in RGB respectively.
+ * Input:
+ *  - [colorCode]: String of information that includes the rgb value of the color
+ * Output:
+ *  - Success code
+ */
+int setFadeColor(String colorCode){
+  colorCode.trim(); //Trim, just in case of bad values.
+  char colorString[100] = colorCode.c_str(); //Potential buffer overflow, but oh well.
+  char* token = std::strtok(colorString, ' '); //strtok is pretty neat, check it out.
+  rgbStatus.r = std::atoi(token);
+  token = std::strtok(NULL, ' '); //Increment the strtok token to the next value
+
+  rgbStatus.g = std::atoi(token);
+  token = std::strtok(NULL, ' ');
+
+  rgbStatus.b = std::atoi(token);
+}
+
+/* ============================= RGB AND COLOR ============================== */
+
 /**
  * Print the RGB info.
  */
-void printRGBInfo(RGB color){
+void PrintRGBInfo(struct RGB color){
   Serial.printf("Red: %d, Green: %d, Blue: %d\n", color.r, color.g, color.b);
 }
 
 /**
- * lightColor lights up the LEDs with RGB
+ * LightColor lights up the LEDs with RGB
  * Input:
  *  - [color]: Full RGB value of the color to light.
  */
-void lightColor(RGB color){
+void LightColor(struct RGB color){
   analogWrite(RED_LED, color.r);
   analogWrite(BLUE_LED, color.b);
   analogWrite(GREEN_LED, color.g);
-  printRGBInfo(color);
+  PrintRGBInfo(color);
 }
 
 /**
  * This function fades a specified color in and out for a specified amount of time.
  * Input:
  *  - [color]: Full RGB value of the color to fade.
- *  - [fadeInTime]: Time to fade into the color (in ms).
- *  - [fadeOutTime]: Time to fade out of the color (in ms).
+ *  - [fadeTime]: Time to fade into and out of the color (in ms).
+ *  - [onTime]: Time to stay on.
  */
-void fadeColor(RGB color, int fadeInTime, int fadeOutTime){
+void FadeColor(struct RGB color, int fadeTime, int onTime){
   rgbStatus = {.r=0, .g=0, .b=0};
   // Calculate the fade in and out step to correctly scale to the color.
   // Value may be slightly off due to integer, but to the naked eye it is impossible
   // to notice the difference.
-  int rInStep = color.r / fadeInTime;
-  int gInStep = color.g / fadeInTime;
-  int bInStep = color.b / fadeInTime;
+  int rStep = color.r / fadeTime;
+  int gStep = color.g / fadeTime;
+  int bStep = color.b / fadeTime;
 
-  int rOutStep = color.r / fadeOutTime;
-  int gOutStep = color.g / fadeOutTime;
-  int bOutStep = color.b / fadeOutTime;
-
-  // Fade in first using cInStep
+  // Fade in first using cStep
   Serial.printf("Fading in...");
-  for(int i = 0; i < fadeInTime; ++i){
-    rgbStatus.r += rInStep;
-    rgbStatus.g += gInStep;
-    rgbStatus.b += bInStep;
-    lightColor(rgbStatus);
+  for(int i = 0; i < fadeTime; ++i){
+    rgbStatus.r += rStep;
+    rgbStatus.g += gStep;
+    rgbStatus.b += bStep;
+    LightColor(rgbStatus);
     delay(1);
   }
 
-  // Fade out first using cInStep
-  Serial.printf("Fading in...");
-  for(int i = 0; i < fadeOutTime; ++i){
-    rgbStatus.r -= rInStep;
-    rgbStatus.g -= gInStep;
-    rgbStatus.b -= bInStep;
-    lightColor(rgbStatus);
+  delay(onTime);
+
+  // Fade out first using cStep
+  Serial.printf("Fading out...");
+  for(int i = 0; i < onTime; ++i){
+    rgbStatus.r -= rStep;
+    rgbStatus.g -= gStep;
+    rgbStatus.b -= bStep;
+    LightColor(rgbStatus);
     delay(1);
   }
 }
@@ -170,25 +246,46 @@ void fadeColor(RGB color, int fadeInTime, int fadeOutTime){
  * Input:
  *  - [speed]: Time between color change
  */
-void TurnOnRainbow(int speed) {
-  for(int i = 0; i < 256; i++){
-    for(int j = 0; j < 256; i++){
-      for(int k = 0; k < 256; i++){
-        analogWrite(RED_LED, i);
-        analogWrite(BLUE_LED, j);
-        analogWrite(GREEN_LED, k);
-        delay(speed);
-      }
-    }
+void TurnOnRainbow(int speed, struct RGB color) {
+  rgbStatus = color;
+
+  LightColor(rgbStatus);
+  if(rgbStatus.r == 0 && rgbStatus.b < 256){
+    rgbStatus.g--;
+    rgbStatus.b++;
+  } else if(rgbStatus.g == 0 && rgbStatus.r < 256) {
+    rgbStatus.b--;
+    rgbStatus.r++;
+  } else if(rgbStatus.b == 0 && rgbStatus.g < 256) {
+    gbStatus.r--;
+    rgbStatus.g++;
+  } else {
+    rgbStatus = {.r=255, .g=0, .b=0};
   }
+
+  delay(speed);
+
+
+  // for(int i = 0; i < 256; i++){
+  //   LightColor(rgbStatus);
+  //   rgbStatus.r--;
+  //   rgbStatus.g++;
+  //   delay(speed);
+  // }
+  // for(int i = 0; i < 256; i++){
+  //   LightColor(rgbStatus);
+  //   rgbStatus.g--;
+  //   rgbStatus.b++;
+  //   delay(speed);
+  // }
+  // for(int i = 0; i < 256; i++){
+  //   LightColor(rgbStatus);
+  //   rgbStatus.b--;
+  //   rgbStatus.r++;
+  //   delay(speed);
+  // }
 }
 
-void readAccel(){
-  accelX = accel.cx;
-  accelY = accel.cy;
-  accelZ = accel.cz;
-  Serial.printf("AccelX: %f, AccelY: %f, AccelZ: %f\n", accelX, accelY, accelZ);
-}
 
 // Testing fade in
 void TurnOn() {
@@ -241,6 +338,24 @@ void TurnOff() {
   }
 }
 
+// Lights up a random color for a certain amount of time.
+void RandomColor(int delayTime){
+  rgbStatus.r = random(0, 256);
+  rgbStatus.g = random(0, 256);
+  rgbStatus.b = random(0, 256);
+  LightColor(rgbStatus);
+  delay(delayTime);
+}
+
+/* ============================= Accelerometer ============================== */
+
+// Updates the accelerometer
+void readAccel(){
+  accelX = accel.cx;
+  accelY = accel.cy;
+  accelZ = accel.cz;
+  Serial.printf("AccelX: %f, AccelY: %f, AccelZ: %f\n", accelX, accelY, accelZ);
+}
 
 // printAccelGraph prints a simple ASCII bar graph for a single accelerometer axis value.
 // Examples:
@@ -293,4 +408,69 @@ void printAccelGraph(float value, String name, int numBarsFull, float rangeAbs)
 
   // To end the line, print the actual value:
   Serial.println(" (" + String(value, 2) + " g)");
+}
+
+/* ================================= MUSIC ================================== */
+/**
+ * Play a tone for a certain amount of time
+ * Input:
+ *  - [freq]: frequency of the buzzerPin
+ *  - [dur]: Duration of the tone
+ */
+void playTone(int freq, int dur){
+  tone(BUZZER, freq, dur);
+  delay(dur);
+}
+
+/**
+ * Duuuuuuuuuuuuuuu duuuu dudu du duuuuuu
+ */
+void playStartingTone(struct RGB color){
+  rgbStatus = {.r=0, .g=0, .b=0};
+  // Calculate the fade in to the right color
+  int rStep = color.r / 130;
+  int gStep = color.g / 130;
+  int bStep = color.b / 130;
+
+  for(int i = G4; i < G5; i+=3){
+    rgbStatus.r += rStep;
+    rgbStatus.g += gStep;
+    rgbStatus.b += bStep;
+    LightColor(rgbStatus);
+    playTone(i, 10);
+  }
+  rgbStatus = color;
+  LightColor(rgbStatus);
+  playTone(G5, 500);
+  rgbStatus = {.r=0, .g=0, .b=0};
+  LightColor(rgbStatus);
+  delay(100);
+
+  rgbStatus = color;
+  LightColor(rgbStatus);
+  playTone(G5, 150);
+  rgbStatus = {.r=0, .g=0, .b=0};
+  LightColor(rgbStatus);
+  delay(50);
+
+  rgbStatus = color;
+  LightColor(rgbStatus);
+  playTone(G5, 150);
+  rgbStatus = {.r=0, .g=0, .b=0};
+  LightColor(rgbStatus);
+  delay(50);
+
+  rgbStatus = color;
+  LightColor(rgbStatus);
+  playTone(F5, 150);
+  rgbStatus = {.r=0, .g=0, .b=0};
+  LightColor(rgbStatus);
+  delay(50);
+
+  rgbStatus = color;
+  LightColor(rgbStatus);
+  playTone(G5, 500);
+  rgbStatus = {.r=0, .g=0, .b=0};
+  LightColor(rgbStatus);
+  delay(50);
 }

@@ -26,14 +26,14 @@ Schematic of MMA8452Q Accelerometer
 
 ### Initial Setup
 
-Here we have our Photon Device, LEDs, and the Guantlet prototype itself.
+####Here we have our Photon Device, LEDs, and the Gauntlet prototype itself.
 ![progress0](References/Progress0.jpg)
 
-First iteration:
+####First iteration:
 ![First LED Setup](References/Blaster/LEDSchematic0.jpg)
 
-Second iteration:
+####Second iteration:
 ![Second LED Setup](References/Blaster/LEDSchematic1.jpg)
 
-It works!
+####It works!
 ![LEDGif0](References/Blaster/LEDProgress0.gif) ![LEDGif1](References/Blaster/LEDProgress1.gif)
