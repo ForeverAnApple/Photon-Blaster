@@ -48,8 +48,9 @@ struct RGB {
 enum GauntletState {
   starting,
   idle,
-  charging,
-  shooting
+  receiving,
+  shooting,
+  inactive
 };
 
 enum GauntletEvent {
@@ -68,8 +69,11 @@ GauntletState gState = starting;
 double accelX, accelY, accelZ;
 
 // LED information
-struct RGB rgbStatus;
+struct RGB rgbStatus; // Current RGB Status
+struct RGB fadeColor; // Color to fade to
 int fadeSpeed = 10;
+int brightness = 0; // Range: 0 - 100
+bool fadeDown = false;
 
 // LED Functionalities
 void TurnOn(); // Test function
@@ -79,6 +83,7 @@ void RandomColor(int);
 void PrintRGBInfo(struct RGB);
 void LightColor(struct RGB);
 void FadeColor(struct RGB, int, int);
+void Breathe();
 
 // Buzzer and Music
 void playTone(int, int);
@@ -121,15 +126,16 @@ void loop(){
     case starting:
       rgbStatus = {.r=0, .g=0, .b=255};
       playStartingTone(rgbStatus);
-      gState = idle;
-      rgbStatus = {.r=255, .g=0, .b=0};
       break;
     case idle:
-      TurnOnRainbow(5, rgbStatus);
+      //TurnOnRainbow(5, rgbStatus);
+      Breathe();
       break;
     default:
       break;
   }
+
+  updateState();
 
   // accel.available() will return 1 if new data is available, 0 otherwise
   if (accel.available())
@@ -156,7 +162,22 @@ void loop(){
  * IoT Component calls, queued up events, accelerometer, and other control schemes.
  */
 void updateState(){
+  readAccel();
+  switch(gState){
+    case starting:
+      gState = idle;
+      rgbStatus = {.r=255, .g=0, .b=0};
+  }
 
+  // Orientation is subject to change, please check your gauntlet
+  // When held parallel: idle mode. Down: inaction. Up: IoT receiving mode.
+  if(accelX <= -1.0){
+    gState = inactive;
+  } else if(accelx >= 1.0){
+    gState = receiving;
+  } else {
+    gState = idle;
+  }
 }
 
 /* ========================== IoT Functionalities =========================== */
@@ -172,13 +193,15 @@ int setFadeColor(String colorCode){
   colorCode.trim(); //Trim, just in case of bad values.
   char colorString[100] = colorCode.c_str(); //Potential buffer overflow, but oh well.
   char* token = std::strtok(colorString, ' '); //strtok is pretty neat, check it out.
-  rgbStatus.r = std::atoi(token);
+  fadeColor.r = std::atoi(token);
   token = std::strtok(NULL, ' '); //Increment the strtok token to the next value
 
-  rgbStatus.g = std::atoi(token);
+  fadeColor.g = std::atoi(token);
   token = std::strtok(NULL, ' ');
 
-  rgbStatus.b = std::atoi(token);
+  fadeColor.b = std::atoi(token);
+
+  return 0;
 }
 
 /* ============================= RGB AND COLOR ============================== */
@@ -200,6 +223,30 @@ void LightColor(struct RGB color){
   analogWrite(BLUE_LED, color.b);
   analogWrite(GREEN_LED, color.g);
   PrintRGBInfo(color);
+}
+
+/**
+ * Deep breaths.
+ */
+void Breathe(){
+  if(fadeDown && brightness > 0){
+    brightness--;
+  else
+    brightness++;
+
+  int red = fadeColor.r * brightness / 100;
+  int green = fadeColor.g * brightness / 100;
+  int blue = fadeColor.b * brightness / 100;
+
+  rgbStatus = {.r=red, .g=green, .b=blue};
+  LightColor(rgbStatus);
+  // fade flip
+  if(brightness <= 0)
+    fadeDown = false;
+  else if(brightness >= 255)
+    fadeDown = true;
+    
+  delay(fadeSpeed);
 }
 
 /**
