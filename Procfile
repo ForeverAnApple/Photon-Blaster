@@ -1,1 +1,1 @@
-web: node photonBlaster.js
+web: node app.js
