@@ -74,7 +74,8 @@ double accelX = 1, accelY = 1, accelZ = 1;
 double accelXd, accelYd, accelZd; // Delta values
 
 // LED information
-struct RGB rgbStatus;
+struct RGB rgbStatus; // Current RGB Status
+struct RGB fadeColor; // Color to fade to
 int fadeSpeed = 10;
 int brightness = 0; // Range: 0 - 100
 bool fadeDown = false;
@@ -88,6 +89,7 @@ void RandomColor(int);
 void PrintRGBInfo(struct RGB);
 void LightColor(struct RGB);
 void FadeColor(struct RGB, int, int);
+void Breathe();
 
 // Buzzer and Music
 void playTone(int, int);
@@ -137,8 +139,6 @@ void loop(){
     case starting:
       rgbStatus = {.r=0, .g=255, .b=255};
       playStartingTone(rgbStatus);
-      gState = idle;
-      rgbStatus = {.r=255, .g=0, .b=0};
       break;
     case idle:
       Breathe();
