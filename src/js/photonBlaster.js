@@ -3,6 +3,7 @@ const access_t = "4938386ce157fb73505b2623c6c421cb3712ab1d";
 var r;
 var g;
 var b;
+
 function func(){
 	setInterval(function(){
   //getRed();
@@ -45,7 +46,7 @@ function send(){
   if (second < 0){
 	second=0;
   }
-  var third = ($('box3').val());
+  var third = ($('#box3').val());
   if (third > 256){
 	third=256;
   }	  
@@ -62,16 +63,18 @@ function send(){
 }
   function rainbow(){
   const url = "https://api.particle.io/v1/devices/"+device_id+"/rainbow";
-  const post_fields = {'access_token': access_t, 'args': info}
+  const post_fields = {'access_token': access_t, 'args': "rsinbow"}
   $.post(url, post_fields, function(data, status){
     console.log(data);
+	console.log("Rainbow Sent");
   }); 
   }
   function strobe(){
   const url = "https://api.particle.io/v1/devices/"+device_id+"/strobe";
-  const post_fields = {'access_token': access_t, 'args': info}
+  const post_fields = {'access_token': access_t, 'args': "strobe"}
   $.post(url, post_fields, function(data, status){
     console.log(data);
+	console.log("Strobe Sent");
   }); 
   }
 	  
