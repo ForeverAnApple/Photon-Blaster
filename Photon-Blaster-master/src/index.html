@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <title>Photon Blaster RGB Settings</title>
+    <link href="src/css/style.css" rel="stylesheet" type="text/css" />
+  </head>
+  <center><body>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="src/js/photonBlaster.js"></script>
+	<h1>Photon Blaster RGB Input</h1>
+    Red Value:<br><input onfocus="this.value=' ' " id="box1"></input><br>
+    Green Value:<br><input onfocus="this.value=' ' " id="box2"></input><br>
+    Blue Value:<br><input onfocus="this.value=' ' " id="box3"></input><br>
+	<button onclick="send()">Send Values</button>
+	<button onclick="func()">Get Values</button>
+	<button onclick="rainbow()">Rainbow</button>
+	<button onclick="strobe()">Strobe</button>
+	<h1 id="color">rgb(0,0,0)</h1>
+  </body></center>
+</html>

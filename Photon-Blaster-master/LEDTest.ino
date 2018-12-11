@@ -3,8 +3,6 @@
  * Author: Daiwei Chen
  * Thank you to Ian Buckley for giving out example.
  */
-#include "Ubidots.h"
-#define TOKEN "A1E-Af0NNQDxMo3LyFrolJHPs6mS2GHeuT
 
 #define RED_LED D0
 #define BLUE_LED D1
@@ -17,8 +15,6 @@ int rBright = 0;
 int bBright = 0;
 
 int fadeSpeed = 10;
-
-Ubidots ubidots(TOKEN);
 
 void TurnOn();
 void TurnOff();
