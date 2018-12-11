@@ -2,7 +2,7 @@
   "name": "photon-blaster-master",
   "version": "1.0.0",
   "description": "-----",
-  "main": "index.js",
+  "main": "app.js",
   "directories": {
     "lib": "lib"
   },
@@ -21,6 +21,7 @@
   "homepage": "https://github.com/ForeverAnApple/Photon-Blaster#readme",
   "dependencies": {
     "express": "^4.16.4",
+    "path": "^0.12.7",
     "save": "^2.3.3"
   },
   "engines": {
