@@ -9,10 +9,11 @@
 #include <vector>
 #include <cstring>
 #include <cstdlib>
+#include <string.h>
 
-#define RED_LED A7
+#define RED_LED A5
 #define BLUE_LED A4
-#define GREEN_LED A5
+#define GREEN_LED A7
 #define BUZZER TX
 
 // Notes frequencies
@@ -48,10 +49,14 @@ struct RGB {
 enum GauntletState {
   starting,
   idle,
-  charging,
-  shooting
+  receiving,
+  shooting,
+  inactive,
+  rainbow,
+  strobe
 };
 
+// To be used later
 enum GauntletEvent {
 
 };
@@ -65,16 +70,20 @@ MMA8452Q accel;
 GauntletState gState = starting;
 
 // Accelerometer information
-double accelX, accelY, accelZ;
+double accelX = 1, accelY = 1, accelZ = 1;
+double accelXd, accelYd, accelZd; // Delta values
 
 // LED information
 struct RGB rgbStatus;
 int fadeSpeed = 10;
+int brightness = 0; // Range: 0 - 100
+bool fadeDown = false;
+bool fadeChanged = false;
 
 // LED Functionalities
 void TurnOn(); // Test function
 void TurnOff(); // Test function
-void TurnOnRainbow(int, struct RGB);
+void Rainbow(int);
 void RandomColor(int);
 void PrintRGBInfo(struct RGB);
 void LightColor(struct RGB);
@@ -83,6 +92,9 @@ void FadeColor(struct RGB, int, int);
 // Buzzer and Music
 void playTone(int, int);
 void playStartingTone(struct RGB);
+void playInactiveTone(struct RGB);
+void playRecieveTone(struct RGB);
+void pewpew(struct RGB);
 
 // Accelerometer functionalities
 void readAccel();
@@ -93,6 +105,8 @@ void updateState();
 
 // IoT components, HTTP get and post requests handling
 int setFadeColor(String);
+int startRainbow(String);
+int startStrobe(String);
 
 void setup() {
   // Setup pinmodes
@@ -106,7 +120,9 @@ void setup() {
   Particle.variable("blue", rgbStatus.b);
 
   // Particle functions
-  Particle.function("fadeColor", setFadeColor);
+  Particle.function("fadeColor", setFadeColor); // "### ### ###"
+  Particle.function("rainbow", startRainbow); // Rainbow time
+  Particle.function("strobe", startStrobe); // I'm having a Strobe
 
   Serial.begin(9600);
   // Initialize the accelerometer with begin():
@@ -119,18 +135,34 @@ void setup() {
 void loop(){
   switch(gState){
     case starting:
-      rgbStatus = {.r=0, .g=0, .b=255};
+      rgbStatus = {.r=0, .g=255, .b=255};
       playStartingTone(rgbStatus);
       gState = idle;
       rgbStatus = {.r=255, .g=0, .b=0};
       break;
     case idle:
-      TurnOnRainbow(5, rgbStatus);
+      Breathe();
+      break;
+    case inactive:
+      Breathe();
+      break;
+    case receiving:
+      Breathe();
+      break;
+    case rainbow:
+      Rainbow(4);
+      break;
+    case strobe:
+      fadeSpeed = 1; // Strobing is just breathing really fast
+      Breathe();
       break;
     default:
       break;
   }
 
+  updateState();
+
+  /*
   // accel.available() will return 1 if new data is available, 0 otherwise
   if (accel.available())
   {
@@ -148,6 +180,7 @@ void loop(){
     printAccelGraph(accel.cz, "Z", 20, 2.0);
     Serial.println();
   }
+  */
 }
 
 /* =========================== gState Controller ============================ */
@@ -156,7 +189,53 @@ void loop(){
  * IoT Component calls, queued up events, accelerometer, and other control schemes.
  */
 void updateState(){
+  readAccel();
+  switch(gState){
+    case starting:
+      fadeColor = {.r=0, .g=255, .b=255};
+    case shooting:
+      gState = idle;
+      fadeSpeed = 15;
+      break;
+    case idle:
+      if(accelYd < -.2 && accelY > -.75){
+        pewpew(fadeColor);
+      }
+      break;
+    default:
+      break;
+  }
 
+  // Orientation is subject to change, please check your gauntlet
+  // When held parallel: idle mode. Down: inaction. Up: IoT receiving mode.
+  if(accelY <= -.7){
+    // Receiving
+    if(gState != receiving && gState != rainbow && gState != strobe){
+      playRecieveTone(fadeColor);
+      fadeColor = {.r=0, .g=255, .b=0};
+      fadeChanged = false;
+    }
+    fadeSpeed = 5;
+    if(gState != rainbow && gState != strobe)
+      gState = receiving;
+  } else if(accelY >= .7){
+    // Inactive
+    if(gState != inactive){
+      playInactiveTone(fadeColor);
+      fadeColor = {.r=255, .g=0, .b=0};
+    }
+    fadeSpeed = 20;
+    gState = inactive;
+  } else {
+    if(gState == inactive){
+      gState = starting;
+    }else{
+      if(!fadeChanged)
+        fadeColor = {.r=0, .g=255, .b=255};
+      gState = idle;
+      fadeSpeed = 15;
+    }
+  }
 }
 
 /* ========================== IoT Functionalities =========================== */
@@ -169,18 +248,59 @@ void updateState(){
  *  - Success code
  */
 int setFadeColor(String colorCode){
+  if(gState != receiving && gState != strobe && gState != rainbow)
+    return 1;
+  fadeChanged = true;
   colorCode.trim(); //Trim, just in case of bad values.
-  char colorString[100] = colorCode.c_str(); //Potential buffer overflow, but oh well.
-  char* token = std::strtok(colorString, ' '); //strtok is pretty neat, check it out.
-  rgbStatus.r = std::atoi(token);
-  token = std::strtok(NULL, ' '); //Increment the strtok token to the next value
+  char* colorString = strdup(colorCode.c_str()); //Potential buffer overflow, but oh well.
+  char* token = std::strtok(colorString, " "); //strtok is pretty neat, check it out.
+  fadeColor.r = std::atoi(token);
+  token = std::strtok(NULL, " "); //Increment the strtok token to the next value
 
-  rgbStatus.g = std::atoi(token);
-  token = std::strtok(NULL, ' ');
+  fadeColor.g = std::atoi(token);
+  token = std::strtok(NULL, " ");
 
-  rgbStatus.b = std::atoi(token);
+  fadeColor.b = std::atoi(token);
+
+  String colorEvent = String("Color has been changed to:" + String(fadeColor.r) + ", " + String(fadeColor.g) + ", " + String(fadeColor.b));
+  Particle.publish(colorEvent);
+  Serial.printf("Fadecolor has been changed to: (%d, %d, %d)\n", fadeColor.r, fadeColor.g, fadeColor.b);
+  if(gState == rainbow){
+    gState = receiving;
+  }
+  return 0;
 }
 
+/**
+ * RAINBOW
+ * Input:
+ *  - [message]: Does nothing, still needed
+ * Output:
+ *  - Success code
+ */
+int startRainbow(String message){
+  if(gState != receiving && gState != strobe)
+    return 1;
+  gState = rainbow;
+  rgbStatus = {.r=255, .g=0, .b=0};
+  Particle.publish("RAINBOW STARTED!");
+  return 0;
+}
+
+/**
+ * Don't look too hard at it
+ * Input:
+ *  - [message]: Does nothing, still needed
+ * Output:
+ *  - Success code
+ */
+int startStrobe(String message){
+  if(gState != receiving && gState != rainbow)
+    return 1;
+  gState = strobe;
+  Particle.publish("Strobing out of control.");
+  return 0;
+}
 /* ============================= RGB AND COLOR ============================== */
 
 /**
@@ -200,6 +320,30 @@ void LightColor(struct RGB color){
   analogWrite(BLUE_LED, color.b);
   analogWrite(GREEN_LED, color.g);
   PrintRGBInfo(color);
+}
+
+/**
+ * Deep breaths.
+ */
+void Breathe(){
+  if(fadeDown && brightness > 0)
+    brightness--;
+  else
+    brightness++;
+
+  int red = fadeColor.r * brightness / 100;
+  int green = fadeColor.g * brightness / 100;
+  int blue = fadeColor.b * brightness / 100;
+
+  rgbStatus = {.r=red, .g=green, .b=blue};
+  LightColor(rgbStatus);
+  // fade flip
+  if(brightness <= 0)
+    fadeDown = false;
+  else if(brightness >= 100)
+    fadeDown = true;
+
+  delay(fadeSpeed);
 }
 
 /**
@@ -246,46 +390,23 @@ void FadeColor(struct RGB color, int fadeTime, int onTime){
  * Input:
  *  - [speed]: Time between color change
  */
-void TurnOnRainbow(int speed, struct RGB color) {
-  rgbStatus = color;
-
+void Rainbow(int speed) {
   LightColor(rgbStatus);
-  if(rgbStatus.r == 0 && rgbStatus.b < 256){
-    rgbStatus.g--;
-    rgbStatus.b++;
-  } else if(rgbStatus.g == 0 && rgbStatus.r < 256) {
-    rgbStatus.b--;
-    rgbStatus.r++;
-  } else if(rgbStatus.b == 0 && rgbStatus.g < 256) {
-    gbStatus.r--;
+  if(rgbStatus.r == 0 && rgbStatus.g < 256){
     rgbStatus.g++;
+    rgbStatus.b--;
+  } else if(rgbStatus.g == 0 && rgbStatus.b < 256) {
+    rgbStatus.b++;
+    rgbStatus.r--;
+  } else if(rgbStatus.b == 0 && rgbStatus.r < 256) {
+    rgbStatus.r++;
+    rgbStatus.g--;
   } else {
     rgbStatus = {.r=255, .g=0, .b=0};
   }
 
   delay(speed);
-
-
-  // for(int i = 0; i < 256; i++){
-  //   LightColor(rgbStatus);
-  //   rgbStatus.r--;
-  //   rgbStatus.g++;
-  //   delay(speed);
-  // }
-  // for(int i = 0; i < 256; i++){
-  //   LightColor(rgbStatus);
-  //   rgbStatus.g--;
-  //   rgbStatus.b++;
-  //   delay(speed);
-  // }
-  // for(int i = 0; i < 256; i++){
-  //   LightColor(rgbStatus);
-  //   rgbStatus.b--;
-  //   rgbStatus.r++;
-  //   delay(speed);
-  // }
 }
-
 
 // Testing fade in
 void TurnOn() {
@@ -351,6 +472,14 @@ void RandomColor(int delayTime){
 
 // Updates the accelerometer
 void readAccel(){
+  if (accel.available()){
+    // To update acceleration values from the accelerometer, call accel.read();
+    accel.read();
+  }
+  accelXd = accel.cx - accelX;
+  accelYd = accel.cy - accelY;
+  accelZd = accel.cz - accelZ;
+
   accelX = accel.cx;
   accelY = accel.cy;
   accelZ = accel.cz;
@@ -428,49 +557,159 @@ void playTone(int freq, int dur){
 void playStartingTone(struct RGB color){
   rgbStatus = {.r=0, .g=0, .b=0};
   // Calculate the fade in to the right color
-  int rStep = color.r / 130;
-  int gStep = color.g / 130;
-  int bStep = color.b / 130;
+  brightness = 0;
 
-  for(int i = G4; i < G5; i+=3){
-    rgbStatus.r += rStep;
-    rgbStatus.g += gStep;
-    rgbStatus.b += bStep;
+  int red = color.r * brightness / 100;
+  int green = color.g * brightness / 100;
+  int blue = color.b * brightness / 100;
+
+  int freq = G4;
+  int freqStep = (G5 - G4) / 10;
+  while(freq < G5){
+    red = color.r * brightness / 100;
+    green = color.g * brightness / 100;
+    blue = color.b * brightness / 100;
+
+    rgbStatus = {.r=red, .g=green, .b=blue};
     LightColor(rgbStatus);
-    playTone(i, 10);
+    playTone(freq, 50);
+    freq += freqStep;
+    brightness += 10;
+    delay(30);
   }
-  rgbStatus = color;
-  LightColor(rgbStatus);
-  playTone(G5, 500);
-  rgbStatus = {.r=0, .g=0, .b=0};
-  LightColor(rgbStatus);
-  delay(100);
 
   rgbStatus = color;
   LightColor(rgbStatus);
-  playTone(G5, 150);
+  playTone(G5, 400);
   rgbStatus = {.r=0, .g=0, .b=0};
   LightColor(rgbStatus);
-  delay(50);
+  delay(70);
 
   rgbStatus = color;
   LightColor(rgbStatus);
-  playTone(G5, 150);
+  playTone(G5, 110);
   rgbStatus = {.r=0, .g=0, .b=0};
   LightColor(rgbStatus);
-  delay(50);
+  delay(40);
 
   rgbStatus = color;
   LightColor(rgbStatus);
-  playTone(F5, 150);
+  playTone(G5, 110);
   rgbStatus = {.r=0, .g=0, .b=0};
   LightColor(rgbStatus);
-  delay(50);
+  delay(40);
 
   rgbStatus = color;
   LightColor(rgbStatus);
-  playTone(G5, 500);
+  playTone(F5, 110);
   rgbStatus = {.r=0, .g=0, .b=0};
   LightColor(rgbStatus);
-  delay(50);
+  delay(40);
+
+  rgbStatus = color;
+  LightColor(rgbStatus);
+  playTone(G5, 400);
+  rgbStatus = {.r=0, .g=0, .b=0};
+  LightColor(rgbStatus);
+  delay(40);
+}
+
+/**
+ * Duuuuu duuu duuuu duuuuuuuu
+ */
+void playInactiveTone(struct RGB color){
+  rgbStatus = color;
+  LightColor(rgbStatus);
+  playTone(G5, 110);
+  rgbStatus = {.r=0, .g=0, .b=0};
+  LightColor(rgbStatus);
+  delay(40);
+
+  rgbStatus = color;
+  LightColor(rgbStatus);
+  playTone(D5, 110);
+  rgbStatus = {.r=0, .g=0, .b=0};
+  LightColor(rgbStatus);
+  delay(40);
+
+  rgbStatus = color;
+  LightColor(rgbStatus);
+  playTone(B4, 110);
+  rgbStatus = {.r=0, .g=0, .b=0};
+  LightColor(rgbStatus);
+  delay(40);
+
+  rgbStatus = color;
+  LightColor(rgbStatus);
+  playTone(G4, 400);
+  rgbStatus = {.r=0, .g=0, .b=0};
+  LightColor(rgbStatus);
+  delay(40);
+}
+
+/**
+ * Duuuuu duuu duuuu duuuuuuuu
+ */
+void playRecieveTone(struct RGB color){
+  rgbStatus = color;
+  LightColor(rgbStatus);
+  playTone(G4, 110);
+  rgbStatus = {.r=0, .g=0, .b=0};
+  LightColor(rgbStatus);
+  delay(40);
+
+  rgbStatus = color;
+  LightColor(rgbStatus);
+  playTone(B4, 110);
+  rgbStatus = {.r=0, .g=0, .b=0};
+  LightColor(rgbStatus);
+  delay(40);
+
+  rgbStatus = color;
+  LightColor(rgbStatus);
+  playTone(D5, 110);
+  rgbStatus = {.r=0, .g=0, .b=0};
+  LightColor(rgbStatus);
+  delay(40);
+
+  rgbStatus = color;
+  LightColor(rgbStatus);
+  playTone(G5, 400);
+  rgbStatus = {.r=0, .g=0, .b=0};
+  LightColor(rgbStatus);
+  delay(40);
+}
+
+/**
+ * Peewwww, pew pew.
+ */
+void pewpew(struct RGB color){
+  brightness = 100;
+
+  int red = color.r * brightness / 100;
+  int green = color.g * brightness / 100;
+  int blue = color.b * brightness / 100;
+
+  int freq = 3136; // G7
+  while(brightness >= 0){
+    red = color.r * brightness / 100;
+    green = color.g * brightness / 100;
+    blue = color.b * brightness / 100;
+
+    rgbStatus = {.r=red, .g=green, .b=blue};
+    switch(brightness){
+      case 75:
+      case 50:
+      case 25:
+        rgbStatus = color;
+        break;
+      default:
+        break;
+    }
+    LightColor(rgbStatus);
+    playTone(freq, 3);
+    freq /= 1.059463;
+    brightness--;
+    delay(1);
+  }
 }
