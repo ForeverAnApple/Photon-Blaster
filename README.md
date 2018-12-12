@@ -23,6 +23,18 @@ Here's our basic schematic of the SMD5050.
 Schematic of MMA8452Q Accelerometer
 ![Schematic of Accelerometer](References/AccelerometerSchematic0.png)
 
+## How to Operate the Photon Blaster
+The blaster will always start in starting mode, where it will have a starting sound and LED animation. Starting mode will always loop back into idle mode.
+Holding the blaster parallel to the ground will always move the blaster into idle mode, if it was in inactive mode to begin with, it will be set into starting mode.
+
+Inactive mode is achieved by pointing the blaster downwards. This should trigger a sound and LED playback. While in Inactive mode, the gauntlet will have no functionalities other than switching modes.
+
+Within Idle mode, the blaster gains the shooting functionality. By pulling the blaster up and back quickly, it should trigger the accelerometer delta y value to make the blaster play a shooting sound and LED animation.
+
+Finally, the blaster can be set to receiving mode when held up towards the sky. This will give the blaster IoT functionalities such as changing color, strobing lights, and lighting up rainbow.
+
+Example IoT Website hosted here: http://photonblaster.herokuapp.com/
+
 ## Functionalities
 
 ### States
